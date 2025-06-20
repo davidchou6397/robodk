@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoboDK Simulator</title>
+    <title>RoboDK Web Demo</title>
     <style>
         * {
             margin: 0;
@@ -167,6 +167,7 @@
             background: radial-gradient(circle, #00d4ff, #0099cc);
             border-radius: 50%;
             box-shadow: 0 0 15px rgba(0, 212, 255, 0.6);
+            transition: all 0.3s ease;
         }
 
         .arm-segment {
@@ -174,7 +175,44 @@
             background: linear-gradient(145deg, #666, #888);
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            animation: robotMove 8s ease-in-out infinite;
+            transition: all 0.5s ease;
+            transform-origin: left center;
+        }
+
+        .end-effector {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background: radial-gradient(circle, #ff6b35, #ff4500);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
+            transition: all 0.3s ease;
+        }
+
+        .target-point {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: radial-gradient(circle, #00ff00, #00cc00);
+            border-radius: 50%;
+            border: 2px solid #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+        }
+
+        .target-point:hover {
+            transform: scale(1.3);
+            box-shadow: 0 0 25px rgba(0, 255, 0, 0.8);
+        }
+
+        .path-line {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, #00d4ff, #00ff00);
+            box-shadow: 0 0 5px rgba(0, 212, 255, 0.6);
+            transform-origin: left center;
+            opacity: 0.8;
         }
 
         @keyframes robotMove {
@@ -370,13 +408,14 @@
 
             <div class="path-preview"></div>
 
-            <div class="robot-arm">
+            <div class="robot-arm" id="robotArm">
                 <div class="base"></div>
-                <div class="joint" style="bottom: 60px; left: 50%; transform: translateX(-50%);"></div>
-                <div class="arm-segment" style="bottom: 70px; left: 45%; width: 60px; height: 8px;"></div>
-                <div class="joint" style="bottom: 120px; left: 70%; transform: translateX(-50%);"></div>
-                <div class="arm-segment" style="bottom: 125px; left: 65%; width: 50px; height: 6px; transform-origin: left;"></div>
-                <div class="joint" style="bottom: 170px; left: 80%; transform: translateX(-50%);"></div>
+                <div class="joint" id="joint1" style="bottom: 60px; left: 50%; transform: translateX(-50%);"></div>
+                <div class="arm-segment" id="segment1" style="bottom: 70px; left: 50%; width: 60px; height: 8px; transform: translateX(-50%) rotate(0deg);"></div>
+                <div class="joint" id="joint2" style="bottom: 70px; left: 80%; transform: translateX(-50%);"></div>
+                <div class="arm-segment" id="segment2" style="bottom: 70px; left: 80%; width: 50px; height: 6px; transform: translateX(-50%) rotate(0deg);"></div>
+                <div class="joint" id="joint3" style="bottom: 70px; left: 105%; transform: translateX(-50%);"></div>
+                <div class="end-effector" id="endEffector" style="bottom: 65px; left: 125%;"></div>
             </div>
 
             <div class="control-panel">
@@ -384,7 +423,28 @@
                 <button class="control-btn" onclick="startSimulation()">▶️ 開始仿真</button>
                 <button class="control-btn" onclick="pauseSimulation()">⏸️ 暫停</button>
                 <button class="control-btn" onclick="resetRobot()">🔄 重置</button>
+                <button class="control-btn" onclick="addTarget()">📍 新增目標點</button>
+                <button class="control-btn" onclick="clearPath()">🗑️ 清除路線</button>
                 <button class="control-btn" onclick="generateCode()">📝 生成程式</button>
+                
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #555;">
+                    <div style="margin-bottom: 10px; color: #00d4ff; font-size: 12px;">關節控制</div>
+                    <div style="margin: 5px 0;">
+                        <label style="font-size: 10px;">J1: </label>
+                        <input type="range" min="-180" max="180" value="0" id="joint1" onchange="updateJoint(1, this.value)" style="width: 80px;">
+                        <span id="j1-val" style="font-size: 10px;">0°</span>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <label style="font-size: 10px;">J2: </label>
+                        <input type="range" min="-90" max="90" value="0" id="joint2" onchange="updateJoint(2, this.value)" style="width: 80px;">
+                        <span id="j2-val" style="font-size: 10px;">0°</span>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <label style="font-size: 10px;">J3: </label>
+                        <input type="range" min="-180" max="180" value="0" id="joint3" onchange="updateJoint(3, this.value)" style="width: 80px;">
+                        <span id="j3-val" style="font-size: 10px;">0°</span>
+                    </div>
+                </div>
             </div>
 
             <div class="loading-overlay" id="loadingOverlay">
@@ -404,6 +464,10 @@
     <script>
         let simulationRunning = false;
         let currentRobot = 'fanuc';
+        let targetPoints = [];
+        let pathLines = [];
+        let currentPath = 0;
+        let jointAngles = {j1: 0, j2: 0, j3: 0};
 
         function selectTool(tool) {
             document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
@@ -422,37 +486,247 @@
         function loadProgram(program) {
             updateStatus(`載入程式: ${program}`);
             showLoading();
+            
+            // 預設程式路線
+            setTimeout(() => {
+                clearPath();
+                if (program === 'pick') {
+                    addTargetPoint(300, 200);
+                    addTargetPoint(400, 300);
+                    addTargetPoint(500, 200);
+                } else if (program === 'weld') {
+                    addTargetPoint(250, 150);
+                    addTargetPoint(350, 200);
+                    addTargetPoint(450, 250);
+                    addTargetPoint(550, 200);
+                } else if (program === 'machine') {
+                    addTargetPoint(300, 300);
+                    addTargetPoint(400, 200);
+                    addTargetPoint(500, 300);
+                    addTargetPoint(400, 400);
+                }
+                hideLoading();
+            }, 1500);
+        }
+
+        function updateJoint(jointNum, angle) {
+            jointAngles[`j${jointNum}`] = parseFloat(angle);
+            document.getElementById(`j${jointNum}-val`).textContent = angle + '°';
+            
+            // 更新機器人姿態
+            updateRobotPose();
+            updateStatus(`關節 J${jointNum}: ${angle}°`);
+        }
+
+        function updateRobotPose() {
+            const segment1 = document.getElementById('segment1');
+            const segment2 = document.getElementById('segment2');
+            const joint2 = document.getElementById('joint2');
+            const joint3 = document.getElementById('joint3');
+            const endEffector = document.getElementById('endEffector');
+            
+            // 計算關節位置和末端執行器位置
+            const baseX = 50; // 基座中心點
+            const baseY = 70;
+            const seg1Length = 60;
+            const seg2Length = 50;
+            
+            // J1 旋轉整個手臂
+            const j1Rad = jointAngles.j1 * Math.PI / 180;
+            const j2Rad = jointAngles.j2 * Math.PI / 180;
+            const j3Rad = jointAngles.j3 * Math.PI / 180;
+            
+            // 第一段手臂
+            segment1.style.transform = `translateX(-50%) rotate(${jointAngles.j1}deg)`;
+            
+            // 第二個關節位置
+            const j2X = baseX + seg1Length * Math.cos(j1Rad);
+            const j2Y = baseY + seg1Length * Math.sin(j1Rad);
+            joint2.style.left = j2X + '%';
+            joint2.style.bottom = j2Y + 'px';
+            
+            // 第二段手臂
+            const totalAngle = jointAngles.j1 + jointAngles.j2;
+            segment2.style.left = j2X + '%';
+            segment2.style.bottom = j2Y + 'px';
+            segment2.style.transform = `translateX(-50%) rotate(${totalAngle}deg)`;
+            
+            // 第三個關節位置
+            const j3X = j2X + seg2Length * Math.cos((jointAngles.j1 + jointAngles.j2) * Math.PI / 180) / 2;
+            const j3Y = j2Y + seg2Length * Math.sin((jointAngles.j1 + jointAngles.j2) * Math.PI / 180);
+            joint3.style.left = j3X + '%';
+            joint3.style.bottom = j3Y + 'px';
+            
+            // 末端執行器位置
+            const endX = j3X + 20 * Math.cos((jointAngles.j1 + jointAngles.j2 + jointAngles.j3) * Math.PI / 180) / 2;
+            const endY = j3Y + 20 * Math.sin((jointAngles.j1 + jointAngles.j2 + jointAngles.j3) * Math.PI / 180);
+            endEffector.style.left = endX + '%';
+            endEffector.style.bottom = endY + 'px';
+            
+            // 更新座標顯示
+            updateCoordinatesDisplay(endX * 5, endY * 3, 100);
+        }
+
+        function addTarget() {
+            const viewport = document.querySelector('.viewport');
+            const rect = viewport.getBoundingClientRect();
+            const x = Math.random() * (rect.width - 100) + 50;
+            const y = Math.random() * (rect.height - 100) + 50;
+            addTargetPoint(x, y);
+        }
+
+        function addTargetPoint(x, y) {
+            const viewport = document.querySelector('.viewport');
+            const target = document.createElement('div');
+            target.className = 'target-point';
+            target.style.left = x + 'px';
+            target.style.top = y + 'px';
+            target.onclick = () => moveToTarget(target, x, y);
+            
+            viewport.appendChild(target);
+            targetPoints.push({element: target, x, y});
+            
+            // 繪製路徑線
+            if (targetPoints.length > 1) {
+                drawPathLine();
+            }
+            
+            updateStatus(`已新增目標點: (${Math.round(x)}, ${Math.round(y)})`);
+        }
+
+        function drawPathLine() {
+            const viewport = document.querySelector('.viewport');
+            const lastTarget = targetPoints[targetPoints.length - 2];
+            const currentTarget = targetPoints[targetPoints.length - 1];
+            
+            const line = document.createElement('div');
+            line.className = 'path-line';
+            
+            const dx = currentTarget.x - lastTarget.x;
+            const dy = currentTarget.y - lastTarget.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            
+            line.style.left = lastTarget.x + 'px';
+            line.style.top = lastTarget.y + 'px';
+            line.style.width = length + 'px';
+            line.style.transform = `rotate(${angle}deg)`;
+            
+            viewport.appendChild(line);
+            pathLines.push(line);
+        }
+
+        function clearPath() {
+            targetPoints.forEach(point => point.element.remove());
+            pathLines.forEach(line => line.remove());
+            targetPoints = [];
+            pathLines = [];
+            currentPath = 0;
+            updateStatus('路徑已清除');
+        }
+
+        function moveToTarget(target, x, y) {
+            // 高亮選中的目標點
+            document.querySelectorAll('.target-point').forEach(t => t.style.border = '2px solid #fff');
+            target.style.border = '3px solid #ff6b35';
+            
+            // 計算逆運動學（簡化版）
+            const targetX = (x / document.querySelector('.viewport').offsetWidth) * 100;
+            const targetY = ((document.querySelector('.viewport').offsetHeight - y) / document.querySelector('.viewport').offsetHeight) * 100;
+            
+            // 簡化的逆運動學計算
+            const distance = Math.sqrt(targetX * targetX + targetY * targetY);
+            const angle1 = Math.atan2(targetY, targetX) * 180 / Math.PI;
+            const angle2 = Math.random() * 60 - 30; // 簡化計算
+            const angle3 = Math.random() * 60 - 30;
+            
+            // 更新關節角度
+            document.getElementById('joint1').value = angle1;
+            document.getElementById('joint2').value = angle2;
+            document.getElementById('joint3').value = angle3;
+            
+            updateJoint(1, angle1);
+            updateJoint(2, angle2);
+            updateJoint(3, angle3);
+            
+            updateStatus(`移動到目標: (${Math.round(x)}, ${Math.round(y)})`);
         }
 
         function startSimulation() {
-            if (!simulationRunning) {
+            if (!simulationRunning && targetPoints.length > 0) {
                 simulationRunning = true;
                 updateStatus('仿真執行中...');
-                document.querySelector('.robot-arm').style.animationPlayState = 'running';
+                runPathSimulation();
+            }
+        }
+
+        function runPathSimulation() {
+            if (currentPath < targetPoints.length && simulationRunning) {
+                const target = targetPoints[currentPath];
+                moveToTarget(target.element, target.x, target.y);
+                currentPath++;
+                
+                setTimeout(() => {
+                    if (simulationRunning) {
+                        runPathSimulation();
+                    }
+                }, 2000);
+            } else {
+                currentPath = 0;
+                if (simulationRunning) {
+                    setTimeout(runPathSimulation, 1000); // 循環執行
+                }
             }
         }
 
         function pauseSimulation() {
             simulationRunning = false;
             updateStatus('仿真已暫停');
-            document.querySelector('.robot-arm').style.animationPlayState = 'paused';
         }
 
         function resetRobot() {
             simulationRunning = false;
+            currentPath = 0;
+            
+            // 重置關節角度
+            document.getElementById('joint1').value = 0;
+            document.getElementById('joint2').value = 0;
+            document.getElementById('joint3').value = 0;
+            
+            jointAngles = {j1: 0, j2: 0, j3: 0};
+            updateRobotPose();
+            
+            // 重置目標點樣式
+            document.querySelectorAll('.target-point').forEach(t => t.style.border = '2px solid #fff');
+            
             updateStatus('機器人已重置');
-            document.querySelector('.robot-arm').style.animation = 'none';
-            setTimeout(() => {
-                document.querySelector('.robot-arm').style.animation = 'robotMove 8s ease-in-out infinite paused';
-            }, 100);
         }
 
         function generateCode() {
+            if (targetPoints.length === 0) {
+                alert('請先新增目標點！');
+                return;
+            }
+            
             updateStatus('正在生成程式碼...');
             showLoading();
+            
             setTimeout(() => {
                 hideLoading();
-                alert('程式碼已生成！\n\n// Fanuc LS Program\nMOVE J1 TO 45 DEG\nMOVE J2 TO -30 DEG\nMOVE TO POINT P1\n...');
+                let code = `! Fanuc LS Program\n! Generated by RoboDK Web Demo\n\n`;
+                code += `1: J P[0] 10% FINE;\n`;
+                
+                targetPoints.forEach((point, index) => {
+                    const x = (point.x * 0.5).toFixed(1);
+                    const y = (point.y * 0.5).toFixed(1);
+                    const z = (100 + Math.random() * 50).toFixed(1);
+                    code += `${index + 2}: L P[${index + 1}] 50mm/sec FINE;\n`;
+                    code += `! Target ${index + 1}: X=${x} Y=${y} Z=${z}\n`;
+                });
+                
+                code += `\n! Program End`;
+                
+                alert(`程式碼已生成！\n\n${code}`);
                 updateStatus('程式碼生成完成');
             }, 2000);
         }
@@ -463,30 +737,32 @@
 
         function showLoading() {
             document.getElementById('loadingOverlay').classList.add('show');
-            setTimeout(hideLoading, 1500);
         }
 
         function hideLoading() {
             document.getElementById('loadingOverlay').classList.remove('show');
         }
 
-        // 模擬座標更新
-        function updateCoordinates() {
-            const coords = ['x-coord', 'y-coord', 'z-coord', 'rx-coord', 'ry-coord', 'rz-coord'];
-            coords.forEach(coord => {
-                const element = document.getElementById(coord);
-                const currentValue = parseFloat(element.textContent);
-                const newValue = currentValue + (Math.random() - 0.5) * 2;
-                element.textContent = newValue.toFixed(1);
-            });
+        function updateCoordinatesDisplay(x, y, z) {
+            document.getElementById('x-coord').textContent = x.toFixed(1);
+            document.getElementById('y-coord').textContent = y.toFixed(1);
+            document.getElementById('z-coord').textContent = z.toFixed(1);
+            document.getElementById('rx-coord').textContent = jointAngles.j1.toFixed(1);
+            document.getElementById('ry-coord').textContent = jointAngles.j2.toFixed(1);
+            document.getElementById('rz-coord').textContent = jointAngles.j3.toFixed(1);
         }
 
-        // 每秒更新座標
-        setInterval(updateCoordinates, 1000);
-
-        // 啟動動畫
+        // 允許點擊視窗新增目標點
         document.addEventListener('DOMContentLoaded', function() {
-            updateStatus('RoboDK Web Demo 已啟動');
+            const viewport = document.querySelector('.viewport');
+            viewport.addEventListener('dblclick', function(e) {
+                const rect = viewport.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                addTargetPoint(x, y);
+            });
+            
+            updateStatus('RoboDK Web Demo 已啟動 - 雙擊新增目標點');
         });
     </script>
 </body>
