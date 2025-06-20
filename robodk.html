@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboDK Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #2b2b2b;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .toolbar {
+            background: #3a3a3a;
+            padding: 8px 20px;
+            display: flex;
+            gap: 15px;
+            border-bottom: 1px solid #555;
+        }
+
+        .tool-btn {
+            background: #4a4a4a;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+
+        .tool-btn:hover {
+            background: #5a5a5a;
+            transform: translateY(-1px);
+        }
+
+        .tool-btn.active {
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 120px);
+        }
+
+        .sidebar {
+            width: 280px;
+            background: #333;
+            border-right: 1px solid #555;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            margin: 15px;
+            background: #3a3a3a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            background: #4a4a4a;
+            padding: 12px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .sidebar-content {
+            padding: 10px;
+        }
+
+        .robot-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #444;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .robot-item:hover {
+            background: #555;
+            transform: translateX(5px);
+        }
+
+        .robot-item.selected {
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .viewport {
+            flex: 1;
+            background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .viewport-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        .robot-arm {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+        }
+
+        .base {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 40px;
+            background: linear-gradient(145deg, #ff6b35, #ff8e53);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+        }
+
+        .joint {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #00d4ff, #0099cc);
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.6);
+        }
+
+        .arm-segment {
+            position: absolute;
+            background: linear-gradient(145deg, #666, #888);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            animation: robotMove 8s ease-in-out infinite;
+        }
+
+        @keyframes robotMove {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(15deg); }
+            50% { transform: rotate(-10deg); }
+            75% { transform: rotate(20deg); }
+        }
+
+        .control-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid #555;
+        }
+
+        .control-btn {
+            background: linear-gradient(145deg, #00d4ff, #0099cc);
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            margin: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .status-bar {
+            background: #1a1a1a;
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #aaa;
+            border-top: 1px solid #555;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .coordinates {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            backdrop-filter: blur(5px);
+        }
+
+        .path-preview {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 2px dashed #00d4ff;
+            border-radius: 50%;
+            animation: pathRotate 10s linear infinite;
+            opacity: 0.6;
+        }
+
+        @keyframes pathRotate {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-overlay.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #333;
+            border-top: 3px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🤖 RoboDK Web Demo</div>
+        <div style="color: #aaa; font-size: 14px;">機器人仿真與離線程式設計</div>
+    </div>
+
+    <div class="toolbar">
+        <button class="tool-btn active" onclick="selectTool('move')">移動</button>
+        <button class="tool-btn" onclick="selectTool('rotate')">旋轉</button>
+        <button class="tool-btn" onclick="selectTool('program')">程式設計</button>
+        <button class="tool-btn" onclick="selectTool('simulate')">仿真</button>
+        <button class="tool-btn" onclick="selectTool('export')">匯出</button>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-header">機器人庫</div>
+                <div class="sidebar-content">
+                    <div class="robot-item selected" onclick="selectRobot('fanuc')">
+                        🦾 Fanuc LR Mate 200iD
+                    </div>
+                    <div class="robot-item" onclick="selectRobot('abb')">
+                        🔧 ABB IRB 1200
+                    </div>
+                    <div class="robot-item" onclick="selectRobot('kuka')">
+                        ⚙️ KUKA KR 3 R540
+                    </div>
+                    <div class="robot-item" onclick="selectRobot('ur')">
+                        🤖 Universal Robots UR5e
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-header">程式列表</div>
+                <div class="sidebar-content">
+                    <div class="robot-item" onclick="loadProgram('pick')">
+                        📦 Pick and Place
+                    </div>
+                    <div class="robot-item" onclick="loadProgram('weld')">
+                        🔥 Welding Path
+                    </div>
+                    <div class="robot-item" onclick="loadProgram('machine')">
+                        🔩 Machining Demo
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-header">工具</div>
+                <div class="sidebar-content">
+                    <div class="robot-item" onclick="selectTool('gripper')">
+                        🤏 Gripper
+                    </div>
+                    <div class="robot-item" onclick="selectTool('welder')">
+                        🔥 Welding Torch
+                    </div>
+                    <div class="robot-item" onclick="selectTool('spindle')">
+                        🔧 Spindle
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="viewport">
+            <div class="viewport-grid"></div>
+            
+            <div class="coordinates">
+                <div>X: <span id="x-coord">125.5</span> mm</div>
+                <div>Y: <span id="y-coord">-87.2</span> mm</div>
+                <div>Z: <span id="z-coord">234.1</span> mm</div>
+                <div>RX: <span id="rx-coord">15.2</span>°</div>
+                <div>RY: <span id="ry-coord">-5.8</span>°</div>
+                <div>RZ: <span id="rz-coord">90.0</span>°</div>
+            </div>
+
+            <div class="path-preview"></div>
+
+            <div class="robot-arm">
+                <div class="base"></div>
+                <div class="joint" style="bottom: 60px; left: 50%; transform: translateX(-50%);"></div>
+                <div class="arm-segment" style="bottom: 70px; left: 45%; width: 60px; height: 8px;"></div>
+                <div class="joint" style="bottom: 120px; left: 70%; transform: translateX(-50%);"></div>
+                <div class="arm-segment" style="bottom: 125px; left: 65%; width: 50px; height: 6px; transform-origin: left;"></div>
+                <div class="joint" style="bottom: 170px; left: 80%; transform: translateX(-50%);"></div>
+            </div>
+
+            <div class="control-panel">
+                <div style="margin-bottom: 15px; font-weight: bold; color: #00d4ff;">控制面板</div>
+                <button class="control-btn" onclick="startSimulation()">▶️ 開始仿真</button>
+                <button class="control-btn" onclick="pauseSimulation()">⏸️ 暫停</button>
+                <button class="control-btn" onclick="resetRobot()">🔄 重置</button>
+                <button class="control-btn" onclick="generateCode()">📝 生成程式</button>
+            </div>
+
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="spinner"></div>
+                <div>載入中...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div>狀態: <span style="color: #00ff00;">就緒</span></div>
+        <div>機器人: Fanuc LR Mate 200iD</div>
+        <div>程式: 準備中</div>
+        <div>RoboDK Web Demo v1.0</div>
+    </div>
+
+    <script>
+        let simulationRunning = false;
+        let currentRobot = 'fanuc';
+
+        function selectTool(tool) {
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            updateStatus(`工具: ${tool}`);
+        }
+
+        function selectRobot(robot) {
+            document.querySelectorAll('.robot-item').forEach(item => item.classList.remove('selected'));
+            event.target.classList.add('selected');
+            currentRobot = robot;
+            updateStatus(`已選擇機器人: ${robot}`);
+            showLoading();
+        }
+
+        function loadProgram(program) {
+            updateStatus(`載入程式: ${program}`);
+            showLoading();
+        }
+
+        function startSimulation() {
+            if (!simulationRunning) {
+                simulationRunning = true;
+                updateStatus('仿真執行中...');
+                document.querySelector('.robot-arm').style.animationPlayState = 'running';
+            }
+        }
+
+        function pauseSimulation() {
+            simulationRunning = false;
+            updateStatus('仿真已暫停');
+            document.querySelector('.robot-arm').style.animationPlayState = 'paused';
+        }
+
+        function resetRobot() {
+            simulationRunning = false;
+            updateStatus('機器人已重置');
+            document.querySelector('.robot-arm').style.animation = 'none';
+            setTimeout(() => {
+                document.querySelector('.robot-arm').style.animation = 'robotMove 8s ease-in-out infinite paused';
+            }, 100);
+        }
+
+        function generateCode() {
+            updateStatus('正在生成程式碼...');
+            showLoading();
+            setTimeout(() => {
+                hideLoading();
+                alert('程式碼已生成！\n\n// Fanuc LS Program\nMOVE J1 TO 45 DEG\nMOVE J2 TO -30 DEG\nMOVE TO POINT P1\n...');
+                updateStatus('程式碼生成完成');
+            }, 2000);
+        }
+
+        function updateStatus(message) {
+            document.querySelector('.status-bar div').innerHTML = `狀態: <span style="color: #00ff00;">${message}</span>`;
+        }
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.add('show');
+            setTimeout(hideLoading, 1500);
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        // 模擬座標更新
+        function updateCoordinates() {
+            const coords = ['x-coord', 'y-coord', 'z-coord', 'rx-coord', 'ry-coord', 'rz-coord'];
+            coords.forEach(coord => {
+                const element = document.getElementById(coord);
+                const currentValue = parseFloat(element.textContent);
+                const newValue = currentValue + (Math.random() - 0.5) * 2;
+                element.textContent = newValue.toFixed(1);
+            });
+        }
+
+        // 每秒更新座標
+        setInterval(updateCoordinates, 1000);
+
+        // 啟動動畫
+        document.addEventListener('DOMContentLoaded', function() {
+            updateStatus('RoboDK Web Demo 已啟動');
+        });
+    </script>
+</body>
+</html>
